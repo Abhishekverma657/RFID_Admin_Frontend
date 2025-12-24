@@ -127,8 +127,8 @@ export default function TestManagementPage() {
                     webcamRequired: formData.webcamRequired,
                     deviceRestriction: formData.deviceRestriction,
                 },
-                startTime: formData.startTime || null,
-                endTime: formData.endTime || null,
+                startTime: formData.startTime ? new Date(formData.startTime).toISOString() : null,
+                endTime: formData.endTime ? new Date(formData.endTime).toISOString() : null,
             };
 
             if (isEditing) {

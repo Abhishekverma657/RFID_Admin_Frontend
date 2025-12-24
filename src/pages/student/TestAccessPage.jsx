@@ -70,7 +70,8 @@ export default function TestAccessPage() {
         if (step !== 3 || !testInfo?.startTime) return;
 
         const calculateTimeLeft = () => {
-            const now = new Date();
+            const offset = parseInt(localStorage.getItem("serverTimeOffset") || "0");
+            const now = new Date(new Date().getTime() + offset);
             const start = new Date(testInfo.startTime);
             const diff = Math.floor((start - now) / 1000);
             return diff > 0 ? diff : 0;
@@ -121,7 +122,13 @@ export default function TestAccessPage() {
 
         try {
             const response = await verifyOTP(userId, otp);
-            const { token, testStudent, test } = response.data;
+            const { token, testStudent, test, serverTime } = response.data;
+
+            // Calculate Skew
+            if (serverTime) {
+                const offset = new Date(serverTime).getTime() - Date.now();
+                localStorage.setItem("serverTimeOffset", offset.toString());
+            }
 
             // Save session 
             localStorage.setItem("testToken", token);

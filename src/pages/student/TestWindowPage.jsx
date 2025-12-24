@@ -94,7 +94,7 @@ export default function TestWindowPage() {
             try {
                 const response = await startTest();
                 if (response.success) {
-                    const { test, questions, testResponse, savedAnswers } = response.data;
+                    const { test, questions, testResponse, savedAnswers, serverTime } = response.data;
                     setTestData(test);
                     setQuestions(questions);
                     setTestResponseId(testResponse.id);
@@ -107,8 +107,9 @@ export default function TestWindowPage() {
                     });
                     setAnswers(initialAnswers);
 
-                    // Calc remaining time
-                    const elapsed = Math.floor((new Date() - new Date(testResponse.startTime)) / 1000);
+                    // Calc remaining time (Using serverTime for precision)
+                    const now = serverTime ? new Date(serverTime) : new Date();
+                    const elapsed = Math.floor((now - new Date(testResponse.startTime)) / 1000);
                     const totalSeconds = test.duration * 60;
                     const left = Math.max(0, totalSeconds - elapsed);
                     setRemainingTime(left);
