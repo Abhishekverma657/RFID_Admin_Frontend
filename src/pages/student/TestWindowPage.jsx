@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { startTest, saveAnswer, submitTest, logViolation, getTimeRemaining } from "../../api/testSystemApi";
-import { Clock, AlertTriangle, Monitor, CheckCircle, ChevronLeft, ChevronRight, Save, Menu } from "lucide-react";
+import { startTest, saveAnswer, submitTest, logViolation, uploadSnapshot, getTimeRemaining } from "../../api/testSystemApi";
+import { Clock, AlertTriangle, Monitor, CheckCircle, ChevronLeft, ChevronRight, Save, Menu, Camera, Video, VideoOff } from "lucide-react";
+import socketService from "../../utils/socketService";
 
 export default function TestWindowPage() {
     const { testId } = useParams();
@@ -14,22 +15,81 @@ export default function TestWindowPage() {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState({}); // { questionId: selectedOption }
     const [remainingTime, setRemainingTime] = useState(0); // seconds
+    const [isSubmitted, setIsSubmitted] = useState(false);
+    const [finalSubmitType, setFinalSubmitType] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [testResponseId, setTestResponseId] = useState(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [socketConnected, setSocketConnected] = useState(false);
+
+    // Webcam States
+    const [cameraActive, setCameraActive] = useState(false);
+    const [cameraError, setCameraError] = useState(false);
+    const [cameraStream, setCameraStream] = useState(null);
 
     // Refs for intervals and detection
     const timerRef = useRef(null);
-    const fullScreenRef = useRef(false);
+    const snapshotIntervalRef = useRef(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    // Initialize webcam
+    const initWebcam = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: 320, height: 240 },
+                audio: false
+            });
+
+            setCameraStream(stream);
+            setCameraActive(true);
+            setCameraError(false);
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            console.error("Camera error:", err);
+            setCameraError(true);
+            setCameraActive(false);
+            // Log as violation
+            if (testResponseId) {
+                handleViolation("CAMERA_OFF");
+            }
+        }
+    }, [testResponseId]);
+
+    // Capture and upload snapshot
+    const captureSnapshot = useCallback(async () => {
+        if (!videoRef.current || !canvasRef.current || !testResponseId || !cameraActive) return;
+
+        try {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext("2d");
+
+            canvas.width = video.videoWidth || 320;
+            canvas.height = video.videoHeight || 240;
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL("image/jpeg", 0.7);
+
+            await uploadSnapshot({
+                testResponseId,
+                imageData
+            });
+
+            console.log("Snapshot captured and uploaded");
+        } catch (err) {
+            console.error("Snapshot upload failed:", err);
+        }
+    }, [testResponseId, cameraActive]);
 
     // Initial Load
     useEffect(() => {
         const initTest = async () => {
             try {
-                // Request Fullscreen (Note: Needs user interaction usually, but here likely already active or requested)
-                // We'll rely on the "Enter Fullscreen" overlay if not active
-
                 const response = await startTest();
                 if (response.success) {
                     const { test, questions, testResponse, savedAnswers } = response.data;
@@ -50,6 +110,31 @@ export default function TestWindowPage() {
                     const left = Math.max(0, totalSeconds - elapsed);
                     setRemainingTime(left);
 
+                    // Connect to Socket and notify Admin
+                    const socket = socketService.connect();
+
+                    const handleSocketConnect = () => {
+                        setSocketConnected(true);
+                        socketService.studentStartedTest({
+                            testStudentId: testResponse.testStudentId,
+                            testId: testResponse.testId,
+                            testResponseId: testResponse._id || testResponse.id,
+                            userId: testResponse.userId
+                        });
+                    };
+
+                    const handleSocketDisconnect = () => {
+                        setSocketConnected(false);
+                    };
+
+                    if (socket.connected) {
+                        handleSocketConnect();
+                    }
+
+                    socket.on("connect", handleSocketConnect);
+                    socket.on("disconnect", handleSocketDisconnect);
+                    socket.on("connect_error", handleSocketDisconnect);
+
                     setLoading(false);
                 }
             } catch (err) {
@@ -68,8 +153,57 @@ export default function TestWindowPage() {
 
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
+            if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current);
         };
     }, [testId, navigate]);
+
+    // Initialize webcam after test loads
+    useEffect(() => {
+        if (!loading && testResponseId) {
+            initWebcam();
+        }
+
+        return () => {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [loading, testResponseId]);
+
+    // Set up video ref when stream changes
+    useEffect(() => {
+        if (videoRef.current && cameraStream) {
+            videoRef.current.srcObject = cameraStream;
+        }
+    }, [cameraStream]);
+
+    // Periodic snapshot capture (every 45 seconds) + Camera Status Watcher
+    useEffect(() => {
+        if (!loading && cameraActive && testResponseId) {
+            // Capture initial snapshot
+            setTimeout(() => captureSnapshot(), 3000);
+
+            // Set up interval for periodic snapshots and camera health check
+            snapshotIntervalRef.current = setInterval(() => {
+                // Check if camera is still actually active
+                if (cameraStream) {
+                    const videoTrack = cameraStream.getVideoTracks()[0];
+                    if (!videoTrack || !videoTrack.enabled || videoTrack.readyState === 'ended') {
+                        console.error("Camera track lost or disabled!");
+                        handleViolation("CAMERA_OFF");
+                        return;
+                    }
+                }
+                captureSnapshot();
+            }, 45000); // Every 45 seconds
+        }
+
+        return () => {
+            if (snapshotIntervalRef.current) {
+                clearInterval(snapshotIntervalRef.current);
+            }
+        };
+    }, [loading, cameraActive, testResponseId, captureSnapshot]);
 
     // Timer
     useEffect(() => {
@@ -78,7 +212,7 @@ export default function TestWindowPage() {
                 setRemainingTime(prev => {
                     if (prev <= 1) {
                         clearInterval(timerRef.current);
-                        handleSubmitTest("timeout"); // Auto submit
+                        handleSubmitTest("auto-time");
                         return 0;
                     }
                     return prev - 1;
@@ -88,9 +222,10 @@ export default function TestWindowPage() {
         return () => clearInterval(timerRef.current);
     }, [loading, remainingTime]);
 
-    // Violation Monitoring
+    // Full Screen & Tab Switch Monitoring Removed based on user request ("test wali screen ko esc mode se mtn full screen hta do")
+    // Only keeping Tab Switch Violation Monitoring for basic integrity
     useEffect(() => {
-        if (loading) return;
+        if (loading || isSubmitted) return;
 
         const handleVisibilityChange = () => {
             if (document.hidden) {
@@ -98,18 +233,19 @@ export default function TestWindowPage() {
             }
         };
 
-        const handleBlur = () => {
-            // handleViolation("WINDOW_BLUR"); // Can be too sensitive
+        const handleBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = "Are you sure you want to leave the test? This may submit your attempt.";
         };
 
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        window.addEventListener("blur", handleBlur);
+        window.addEventListener("beforeunload", handleBeforeUnload);
 
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("blur", handleBlur);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
         };
-    }, [loading, testResponseId]);
+    }, [loading, testResponseId, isSubmitted]);
 
     const handleViolation = async (type) => {
         try {
@@ -120,10 +256,33 @@ export default function TestWindowPage() {
             });
 
             if (res.data?.autoSubmitted) {
-                alert(`Test Auto-Submitted due to violation: ${res.data.reason}`);
-                navigate("/"); // Or result page
+                // Notify via Socket
+                socketService.notifyAutoSubmit({
+                    testStudentId,
+                    testResponseId,
+                    reason: `${type} violation (Fatal)`
+                });
+
+                // Stop camera
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
+                setFinalSubmitType("auto-violation");
+                setIsSubmitted(true);
+                localStorage.removeItem("testToken");
             } else {
-                // Warning toast could be shown here
+                // Notify violation via socket
+                socketService.sendViolation({
+                    testStudentId,
+                    testResponseId,
+                    violationType: type,
+                    metadata: { timestamp: new Date() }
+                });
+
+                if (res.data?.warning) {
+                    // Show warning
+                    alert(`${res.data.warning.message}\nPlease avoid this action to prevent auto-submission.`);
+                }
                 console.warn("Violation logged:", type);
             }
         } catch (e) {
@@ -135,30 +294,41 @@ export default function TestWindowPage() {
         const currentQ = questions[currentQuestionIndex];
         setAnswers(prev => ({ ...prev, [currentQ.id]: option }));
 
-        // Optimistic UI, but save in background
         try {
             await saveAnswer({
                 testResponseId,
                 questionId: currentQ.id,
                 selectedOption: option,
-                timeSpent: 0 // Ideally track per question
+                timeSpent: 0
             });
         } catch (e) {
             console.error("Failed to save answer", e);
-            // Optionally retry or warn
         }
     };
 
     const handleSubmitTest = async (type = "manual") => {
         setIsSubmitting(true);
+
+        // Capture final snapshot before submitting
+        if (cameraActive) {
+            await captureSnapshot();
+        }
+
         try {
             await submitTest({
                 testResponseId,
                 submitType: type
             });
-            alert("Test Submitted Successfully!");
+
+            // Stop camera
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+            }
+
+            // alert("Test Submitted Successfully!"); // Replaced with Thank You screen
             localStorage.removeItem("testToken");
-            navigate("/"); // Or a "Test Completed" page
+            setFinalSubmitType(type);
+            setIsSubmitted(true);
         } catch (e) {
             alert("Submission failed: " + e.message);
             setIsSubmitting(false);
@@ -169,6 +339,46 @@ export default function TestWindowPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
+
+    if (isSubmitted) {
+        const handleClose = () => {
+            try {
+                window.close();
+            } catch (e) {
+                console.log("Could not close window via script");
+            }
+            // Fallback content if script cannot close
+            document.body.innerHTML = "<div style='display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'><h1>You can now close this tab.</h1></div>";
+        };
+
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+                <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-lg w-full">
+                    <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <CheckCircle size={40} />
+                    </div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Thank You!</h1>
+                    <p className="text-gray-600 mb-6">Your test has been submitted successfully.</p>
+
+                    <div className="bg-gray-50 rounded-lg p-4 mb-8 text-left">
+                        <p className="text-sm text-gray-500 mb-1">Submission Type</p>
+                        <p className="font-mono font-medium text-gray-800">
+                            {finalSubmitType === "manual" ? "Manually Submitted" :
+                                finalSubmitType === "auto-time" ? "Auto-Submitted (Time Up)" :
+                                    finalSubmitType === "auto-violation" ? "Auto-Submitted (Violation)" : "Submitted"}
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={handleClose}
+                        className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-[1.02] shadow-lg"
+                    >
+                        Close Window
+                    </button>
+                </div>
             </div>
         );
     }
@@ -197,6 +407,9 @@ export default function TestWindowPage() {
 
     return (
         <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+            {/* Hidden canvas for snapshot capture */}
+            <canvas ref={canvasRef} style={{ display: "none" }} />
+
             {/* Header */}
             <header className="bg-white shadow-sm px-6 py-3 flex justify-between items-center z-10">
                 <div className="flex items-center gap-4">
@@ -205,7 +418,37 @@ export default function TestWindowPage() {
                     </h1>
                 </div>
 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4">
+                    {/* Socket Status Indicator */}
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${socketConnected
+                        ? "bg-blue-50 text-blue-700 border border-blue-100"
+                        : "bg-red-50 text-red-700 border border-red-100"
+                        }`}>
+                        <div className={`w-2 h-2 rounded-full ${socketConnected ? "bg-blue-500 animate-pulse" : "bg-red-500"}`}></div>
+                        <Activity size={16} />
+                        <span className="hidden sm:inline">{socketConnected ? "Proctoring Active" : "Proctoring Offline"}</span>
+                    </div>
+
+                    {/* Camera Status Indicator */}
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${cameraActive
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
+                        }`}>
+                        {cameraActive ? (
+                            <>
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                <Video size={16} />
+                                <span className="hidden sm:inline">Camera On</span>
+                            </>
+                        ) : (
+                            <>
+                                <VideoOff size={16} />
+                                <span className="hidden sm:inline">Camera Off</span>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Timer */}
                     <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-1.5 rounded-lg ${remainingTime < 300 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-800'}`}>
                         <Clock size={20} />
                         {formatTime(remainingTime)}
@@ -224,19 +467,7 @@ export default function TestWindowPage() {
             <div className="flex-1 flex overflow-hidden">
                 {/* Question Area */}
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col max-w-5xl mx-auto w-full">
-                    {/* Progress Bar */}
-                    <div className="mb-6">
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
-                            <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
-                            <span>{Math.round(((currentQuestionIndex + 1) / questions.length) * 100)}% Completed</span>
-                        </div>
-                        <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                            <div
-                                className="bg-blue-600 h-full transition-all duration-300"
-                                style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}
-                            ></div>
-                        </div>
-                    </div>
+                    {/* Progress Bar Removed as per request */}
 
                     {/* Question Card */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8 flex-1 flex flex-col">
@@ -244,34 +475,58 @@ export default function TestWindowPage() {
                             <span className="text-sm font-semibold text-blue-600 mb-2 block">
                                 Question {currentQuestionIndex + 1}
                             </span>
-                            <h2 className="text-xl md:text-2xl font-medium text-gray-900 leading-relaxed">
+                            <h2 className="text-xl md:text-2xl font-medium text-gray-900 leading-relaxed mb-4">
                                 {currentQ.question}
                             </h2>
+                            {currentQ.questionImage && (
+                                <div className="mb-4">
+                                    <img
+                                        src={currentQ.questionImage}
+                                        alt="Question Illustration"
+                                        className="max-h-64 rounded-lg border border-gray-200 object-contain"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-3 flex-1">
-                            {['A', 'B', 'C', 'D'].map((opt) => (
+                            {/* Check if we have new options array or legacy fields */}
+                            {(currentQ.options && currentQ.options.length > 0
+                                ? currentQ.options.map((opt, i) => ({ ...opt, label: String.fromCharCode(65 + i) }))
+                                : ['A', 'B', 'C', 'D'].map(label => ({ label, text: currentQ[`option${label}`], image: null }))
+                            ).map((opt, idx) => (
                                 <label
-                                    key={opt}
+                                    key={idx}
                                     className={`
-                                        flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all
-                                        ${answers[currentQ.id] === opt
+                                        flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all gap-4
+                                        ${answers[currentQ.id] === opt.label
                                             ? 'border-blue-600 bg-blue-50'
                                             : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}
                                     `}
                                 >
-                                    <input
-                                        type="radio"
-                                        name={`q-${currentQ.id}`}
-                                        value={opt}
-                                        checked={answers[currentQ.id] === opt}
-                                        onChange={() => handleAnswerSelect(opt)}
-                                        className="w-5 h-5 text-blue-600 focus:ring-blue-500"
-                                    />
-                                    <span className="ml-4 text-gray-700 font-medium">
-                                        <span className="inline-block w-6 font-bold text-gray-400">{opt}.</span>
-                                        {currentQ[`option${opt}`]}
-                                    </span>
+                                    <div className="flex items-center h-full pt-1">
+                                        <input
+                                            type="radio"
+                                            name={`q-${currentQ.id}`}
+                                            value={opt.label}
+                                            checked={answers[currentQ.id] === opt.label}
+                                            onChange={() => handleAnswerSelect(opt.label)}
+                                            className="w-5 h-5 text-blue-600 focus:ring-blue-500 mt-0.5"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-gray-400 w-6">{opt.label}.</span>
+                                            <span className="text-gray-700 font-medium">{opt.text}</span>
+                                        </div>
+                                        {opt.image && (
+                                            <img
+                                                src={opt.image}
+                                                alt={`Option ${opt.label}`}
+                                                className="mt-2 max-h-32 rounded border border-gray-200"
+                                            />
+                                        )}
+                                    </div>
                                 </label>
                             ))}
                         </div>
@@ -295,9 +550,18 @@ export default function TestWindowPage() {
                                     }
                                 }}
                                 disabled={isSubmitting}
-                                className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-white bg-green-600 hover:bg-green-700 shadow-md transition transform hover:-translate-y-0.5"
+                                className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-white bg-green-600 hover:bg-green-700 shadow-md transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                <CheckCircle size={20} /> Submit Test
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle size={20} /> Submit Test
+                                    </>
+                                )}
                             </button>
                         ) : (
                             <button
@@ -322,29 +586,89 @@ export default function TestWindowPage() {
                             <button onClick={() => setSidebarOpen(false)}><Menu size={20} /></button>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-2 overflow-y-auto content-start p-1">
-                            {questions.map((q, idx) => {
-                                const isAnswered = answers[q.id];
-                                const isCurrent = currentQuestionIndex === idx;
-                                return (
-                                    <button
-                                        key={q.id}
-                                        onClick={() => {
-                                            setCurrentQuestionIndex(idx);
-                                            setSidebarOpen(false);
-                                        }}
-                                        className={`
-                                            aspect-square rounded-lg font-semibold text-sm flex items-center justify-center transition
-                                            ${isCurrent ? 'ring-2 ring-blue-600 ring-offset-2' : ''}
-                                            ${isAnswered
-                                                ? 'bg-blue-600 text-white'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
-                                        `}
-                                    >
-                                        {idx + 1}
-                                    </button>
-                                );
-                            })}
+                        {/* Webcam Preview */}
+                        <div className="mb-4 rounded-xl overflow-hidden bg-gray-900 relative">
+                            {cameraActive ? (
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="w-full aspect-video object-cover transform scale-x-[-1]"
+                                />
+                            ) : (
+                                <div className="w-full aspect-video flex items-center justify-center">
+                                    <div className="text-center text-white">
+                                        <VideoOff size={32} className="mx-auto mb-2 text-red-400" />
+                                        <p className="text-xs">Camera Unavailable</p>
+                                        <button
+                                            onClick={initWebcam}
+                                            className="mt-2 text-xs bg-blue-600 px-3 py-1 rounded hover:bg-blue-700"
+                                        >
+                                            Retry
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {cameraActive && (
+                                <div className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                    REC
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-1">
+                            {/* Group questions by Level for display */}
+                            {(() => {
+                                const levels = ["Easy", "Medium", "Hard"];
+                                const grouped = { Easy: [], Medium: [], Hard: [] };
+
+                                // Group while preserving original index
+                                questions.forEach((q, originalIdx) => {
+                                    const lvl = q.level || "Medium";
+                                    if (!grouped[lvl]) grouped[lvl] = [];
+                                    grouped[lvl].push({ ...q, originalIdx });
+                                });
+
+                                return levels.map(level => {
+                                    if (!grouped[level] || grouped[level].length === 0) return null;
+
+                                    return (
+                                        <div key={level} className="mb-4">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
+                                                {level} Section
+                                            </h4>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {grouped[level].map((q) => {
+                                                    const idx = q.originalIdx; // Use original index for logic
+                                                    const isAnswered = answers[q.id];
+                                                    const isCurrent = currentQuestionIndex === idx;
+
+                                                    return (
+                                                        <button
+                                                            key={q.id}
+                                                            onClick={() => {
+                                                                setCurrentQuestionIndex(idx);
+                                                                setSidebarOpen(false);
+                                                            }}
+                                                            className={`
+                                                                aspect-square rounded-lg font-semibold text-sm flex items-center justify-center transition
+                                                                ${isCurrent ? 'ring-2 ring-blue-600 ring-offset-2' : ''}
+                                                                ${isAnswered
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
+                                                            `}
+                                                        >
+                                                            {idx + 1}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
 
                         <div className="mt-auto pt-6 border-t space-y-3">

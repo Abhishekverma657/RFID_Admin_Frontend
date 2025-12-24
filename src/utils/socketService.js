@@ -9,29 +9,43 @@ class SocketService {
     }
 
     connect() {
-        if (this.socket && this.isConnected) {
+        if (this.socket && this.socket.connected) {
             return this.socket;
         }
 
-        this.socket = io(`${SOCKET_URL}/proctoring`, {
-            transports: ["websocket"],
+        // Parse VITE_API_BASE_URL to get the root domain (remove /api if present)
+        let baseUrl = SOCKET_URL;
+        try {
+            const url = new URL(SOCKET_URL);
+            baseUrl = url.origin; // This extracts http://localhost:5000 or actual domain
+        } catch (e) {
+            console.error("Invalid SOCKET_URL:", SOCKET_URL);
+        }
+
+        console.log(`Socket connecting to: ${baseUrl}/proctoring`);
+
+        this.socket = io(`${baseUrl}/proctoring`, {
+            transports: ["websocket", "polling"], // Allow polling fallback for stability
             reconnection: true,
             reconnectionDelay: 1000,
-            reconnectionAttempts: 5,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: Infinity, // Keep retrying until system is back online
+            timeout: 20000,
         });
 
         this.socket.on("connect", () => {
-            console.log("Socket.IO connected");
+            console.log("Socket.IO connected to proctoring namespace");
             this.isConnected = true;
         });
 
-        this.socket.on("disconnect", () => {
-            console.log("Socket.IO disconnected");
+        this.socket.on("disconnect", (reason) => {
+            console.log("Socket.IO disconnected:", reason);
             this.isConnected = false;
         });
 
         this.socket.on("connect_error", (error) => {
-            console.error("Socket.IO connection error:", error);
+            console.error("Socket.IO connection error:", error.message);
+            this.isConnected = false;
         });
 
         return this.socket;

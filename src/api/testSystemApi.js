@@ -107,8 +107,32 @@ export const getQuestions = async (instituteId, className = "", set = "") => {
     return response.data;
 };
 
+export const createQuestion = async (data) => {
+    const response = await api.post("/questions", data);
+    return response.data;
+};
+
 export const deleteQuestion = async (id) => {
     const response = await api.delete(`/questions/${id}`);
+    return response.data;
+};
+
+export const updateQuestion = async (id, data) => {
+    const response = await api.put(`/questions/${id}`, data);
+    return response.data;
+};
+
+export const reorderQuestions = async (questionIds) => {
+    const response = await api.post("/questions/reorder", { questionIds });
+    return response.data;
+};
+
+export const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await api.post("/questions/upload/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+    });
     return response.data;
 };
 

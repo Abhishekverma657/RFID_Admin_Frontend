@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, X, Clock, AlertCircle, Link as LinkIcon, FileQuestion } from "lucide-react";
-import { createTest, getTests, updateTest, deleteTest } from "../api/testSystemApi";
+import { Plus, Edit2, Trash2, X, Clock, AlertCircle, Link as LinkIcon, FileQuestion, BookOpen } from "lucide-react";
+import { createTest, getTests, updateTest, deleteTest, getQuestionPapers } from "../api/testSystemApi";
 import { useAppContext } from "../context/AppContext";
 import React from "react";
 export default function TestManagementPage() {
@@ -9,6 +9,7 @@ export default function TestManagementPage() {
     const [showModal, setShowModal] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentTestId, setCurrentTestId] = useState(null);
+    const [questionPapers, setQuestionPapers] = useState([]);
 
     const { user } = useAppContext();
     const instituteId = user?.instituteId || user?._id;
@@ -21,6 +22,7 @@ export default function TestManagementPage() {
         passingMarks: 33,
         targetClass: "",
         targetPaperSet: "A",
+        selectedPaperId: "", // New field for question paper selection
 
         // Rules - mapped to proctoringConfig
         tabSwitchLimit: 3,
@@ -28,13 +30,27 @@ export default function TestManagementPage() {
         fullScreenEnforced: true,
         webcamRequired: true,
         deviceRestriction: "any",
+        startTime: "",
+        endTime: "",
     });
 
     useEffect(() => {
         if (instituteId) {
             fetchTests();
+            fetchQuestionPapers();
         }
     }, [instituteId]);
+
+    useEffect(() => {
+        if (formData.startTime && formData.endTime) {
+            const start = new Date(formData.startTime);
+            const end = new Date(formData.endTime);
+            if (end > start) {
+                const diffInMins = Math.floor((end - start) / (1000 * 60));
+                setFormData(prev => ({ ...prev, duration: diffInMins }));
+            }
+        }
+    }, [formData.startTime, formData.endTime]);
 
     const fetchTests = async () => {
         try {
@@ -42,6 +58,34 @@ export default function TestManagementPage() {
             setTests(response.data);
         } catch (error) {
             alert("Error fetching tests: " + error.message);
+        }
+    };
+
+    const fetchQuestionPapers = async () => {
+        try {
+            const response = await getQuestionPapers(instituteId);
+            setQuestionPapers(response.data || []);
+        } catch (error) {
+            console.error("Error fetching question papers:", error);
+        }
+    };
+
+    const handlePaperSelect = (paperId) => {
+        const selectedPaper = questionPapers.find(p => p._id === paperId);
+        if (selectedPaper) {
+            setFormData({
+                ...formData,
+                selectedPaperId: paperId,
+                targetClass: selectedPaper.class,
+                targetPaperSet: selectedPaper.set,
+            });
+        } else {
+            setFormData({
+                ...formData,
+                selectedPaperId: "",
+                targetClass: "",
+                targetPaperSet: "A",
+            });
         }
     };
 
@@ -59,13 +103,16 @@ export default function TestManagementPage() {
                 passingMarks: Number(formData.passingMarks),
                 targetClass: formData.targetClass,
                 targetPaperSet: formData.targetPaperSet,
+                questionPaperId: formData.selectedPaperId || null,
                 proctoringConfig: {
                     tabSwitchLimit: Number(formData.tabSwitchLimit),
                     violationLimit: Number(formData.violationLimit),
                     fullScreenEnforced: formData.fullScreenEnforced,
                     webcamRequired: formData.webcamRequired,
                     deviceRestriction: formData.deviceRestriction,
-                }
+                },
+                startTime: formData.startTime || null,
+                endTime: formData.endTime || null,
             };
 
             if (isEditing) {
@@ -95,12 +142,15 @@ export default function TestManagementPage() {
             passingMarks: test.passingMarks,
             targetClass: test.targetClass || "",
             targetPaperSet: test.targetPaperSet || "A",
+            selectedPaperId: test.questionPaperId || "",
 
             tabSwitchLimit: config.tabSwitchLimit || 3,
             violationLimit: config.violationLimit || 5,
             fullScreenEnforced: config.fullScreenEnforced ?? true,
             webcamRequired: config.webcamRequired ?? true,
             deviceRestriction: config.deviceRestriction || "any",
+            startTime: test.startTime ? new Date(test.startTime).toISOString().slice(0, 16) : "",
+            endTime: test.endTime ? new Date(test.endTime).toISOString().slice(0, 16) : "",
         });
         setShowModal(true);
     };
@@ -134,11 +184,14 @@ export default function TestManagementPage() {
             passingMarks: 33,
             targetClass: "",
             targetPaperSet: "A",
+            selectedPaperId: "",
             tabSwitchLimit: 3,
             violationLimit: 5,
             fullScreenEnforced: true,
             webcamRequired: true,
             deviceRestriction: "any",
+            startTime: "",
+            endTime: "",
         });
     };
 
@@ -279,44 +332,76 @@ export default function TestManagementPage() {
                                         />
                                     </div>
                                 </div>
+                                {/* Question Paper Selection */}
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <BookOpen size={18} className="text-blue-600" />
+                                        <label className="text-sm font-semibold text-blue-900">Select Question Paper <span className="text-red-500">*</span></label>
+                                    </div>
+                                    <select
+                                        required
+                                        value={formData.selectedPaperId}
+                                        onChange={(e) => handlePaperSelect(e.target.value)}
+                                        className="w-full border border-blue-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-800"
+                                    >
+                                        <option value="">-- Select a Question Paper --</option>
+                                        {questionPapers.map((paper) => (
+                                            <option key={paper._id} value={paper._id}>
+                                                {paper.title} | Class: {paper.class} | Set: {paper.set} ({paper.questionCount || 0} Qs)
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {questionPapers.length === 0 && (
+                                        <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                                            <AlertCircle size={14} />
+                                            No question papers found. Please import questions first.
+                                        </p>
+                                    )}
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Target Class <span className="text-red-500">*</span></label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Target Class</label>
                                         <input
                                             type="text"
-                                            required
+                                            readOnly
                                             value={formData.targetClass}
-                                            onChange={(e) => setFormData({ ...formData, targetClass: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            placeholder="e.g. 10th"
+                                            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 bg-gray-50 text-gray-600 cursor-not-allowed"
+                                            placeholder="Auto-filled from paper"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Paper Set <span className="text-red-500">*</span></label>
-                                        <select
-                                            required
-                                            value={formData.targetPaperSet}
-                                            onChange={(e) => setFormData({ ...formData, targetPaperSet: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        >
-                                            <option value="A">Set A</option>
-                                            <option value="B">Set B</option>
-                                            <option value="C">Set C</option>
-                                            <option value="D">Set D</option>
-                                        </select>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Paper Set</label>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={formData.targetPaperSet ? `Set ${formData.targetPaperSet}` : ""}
+                                            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 bg-gray-50 text-gray-600 cursor-not-allowed"
+                                            placeholder="Auto-filled from paper"
+                                        />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Duration (mins) <span className="text-red-500">*</span></label>
-                                        <input
-                                            type="number"
-                                            required
-                                            min="1"
-                                            value={formData.duration}
-                                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                            className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
-                                        />
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                                            <Clock size={16} className="text-gray-400" />
+                                            Duration (mins)
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={formData.duration}
+                                                onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                                readOnly={!!(formData.startTime && formData.endTime)}
+                                                className={`w-full border border-gray-300 rounded-lg px-4 py-2.5 ${formData.startTime && formData.endTime ? 'bg-gray-50 text-blue-600 font-semibold cursor-not-allowed' : 'bg-white'}`}
+                                                placeholder="Set times to auto-calculate"
+                                            />
+                                            {formData.startTime && formData.endTime && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                    <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold uppercase">Auto</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Total Marks <span className="text-red-500">*</span></label>
@@ -339,6 +424,43 @@ export default function TestManagementPage() {
                                             onChange={(e) => setFormData({ ...formData, passingMarks: e.target.value })}
                                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
                                         />
+                                    </div>
+                                </div>
+                                <div className="p-5 bg-gray-50 rounded-2xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none">
+                                        <Clock size={80} />
+                                    </div>
+                                    <div className="relative">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                            Start Date & Time
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="datetime-local"
+                                                value={formData.startTime}
+                                                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                                                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none bg-white shadow-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                                            End Date & Time
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="datetime-local"
+                                                value={formData.endTime}
+                                                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                                                className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all outline-none bg-white shadow-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2 text-[11px] text-gray-500 flex items-center gap-1.5 bg-white/50 p-2 rounded-lg border border-dashed border-gray-300">
+                                        <AlertCircle size={14} className="text-blue-500" />
+                                        Duration will be automatically updated based on selected times.
                                     </div>
                                 </div>
                             </div>

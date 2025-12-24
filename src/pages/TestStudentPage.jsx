@@ -26,6 +26,8 @@ export default function TestStudentPage() {
     const [formData, setFormData] = useState({
         name: "",
         email: "",
+        rollNumber: "", // New
+        mobileNumber: "", // New
         testId: "",
         className: "",
         paperSet: "A",
@@ -45,15 +47,19 @@ export default function TestStudentPage() {
     }, [instituteId]);
 
     const fetchStudents = async () => {
+        if (!instituteId) return;
         try {
+            console.log("Fetching students for institute:", instituteId);
             const response = await getTestStudents(instituteId);
             setStudents(response.data);
         } catch (error) {
-            alert("Error fetching students: " + error.message);
+            console.error("Fetch students error:", error);
+            // alert("Error fetching students: " + error.message); // Suppress alert loop
         }
     };
 
     const fetchTests = async () => {
+        if (!instituteId) return;
         try {
             const response = await getTests(instituteId);
             setTests(response.data);
@@ -74,6 +80,8 @@ export default function TestStudentPage() {
             setFormData({
                 name: "",
                 email: "",
+                rollNumber: "",
+                mobileNumber: "",
                 testId: "",
                 className: "",
                 paperSet: "A"
@@ -115,6 +123,7 @@ export default function TestStudentPage() {
 
     return (
         <div className="p-6">
+            {/* ... header ... */}
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Test Students</h1>
                 <button
@@ -131,12 +140,12 @@ export default function TestStudentPage() {
                 <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User ID</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email/User ID</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Mobile</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Assigned Test</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Class</th>
-                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Set</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Class/Set</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
@@ -150,13 +159,19 @@ export default function TestStudentPage() {
                         ) : (
                             students.map((student) => (
                                 <tr key={student._id} className="hover:bg-gray-50 transition">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="font-mono text-sm font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                            {student.userId}
-                                        </span>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {student.rollNumber || "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{student.name}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{student.email}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                                        {student.name}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                        <div className="text-gray-900">{student.email}</div>
+                                        <div className="text-gray-500 text-xs font-mono">{student.userId}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {student.mobileNumber || "-"}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">
                                         {student.assignedTest ? (
                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -164,18 +179,12 @@ export default function TestStudentPage() {
                                             </span>
                                         ) : "-"}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">{student.assignedClass || "-"}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        {student.assignedPaperSet ? (
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${student.assignedPaperSet === 'A' ? 'bg-purple-100 text-purple-800' :
-                                                student.assignedPaperSet === 'B' ? 'bg-indigo-100 text-indigo-800' :
-                                                    student.assignedPaperSet === 'C' ? 'bg-pink-100 text-pink-800' :
-                                                        'bg-orange-100 text-orange-800'
-                                                }`}>
-                                                Set {student.assignedPaperSet}
-                                            </span>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        {student.assignedClass && student.assignedPaperSet ? (
+                                            <span>{student.assignedClass} / Set {student.assignedPaperSet}</span>
                                         ) : "-"}
                                     </td>
+                                    {/* ... Actions ... */}
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex gap-3">
                                             <button
@@ -248,6 +257,28 @@ export default function TestStudentPage() {
                                             className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                             placeholder="john@example.com"
                                         />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Roll Number</label>
+                                            <input
+                                                type="text"
+                                                value={formData.rollNumber}
+                                                onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
+                                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                                placeholder="Opt"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Mobile No</label>
+                                            <input
+                                                type="tel"
+                                                value={formData.mobileNumber}
+                                                onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
+                                                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                                placeholder="Opt"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
