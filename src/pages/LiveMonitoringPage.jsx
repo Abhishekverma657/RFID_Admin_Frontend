@@ -1,8 +1,23 @@
 import { useState, useEffect } from "react";
 import { Bell, Users, AlertTriangle, Activity, CheckCircle, Clock } from "lucide-react";
+import toast from "react-hot-toast";
 import socketService from "../utils/socketService";
 import React from 'react';
 import { useAppContext } from "../context/AppContext";
+
+const formatISO = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().replace('T', ' ').slice(0, 16);
+};
+
+const formatTime = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(11, 19);
+};
 
 export default function LiveMonitoringPage() {
     const [activeStudents, setActiveStudents] = useState([]);
@@ -126,7 +141,7 @@ export default function LiveMonitoringPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex items-center gap-5 hover:shadow-md transition">
                     <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                         <Users size={28} />
@@ -167,7 +182,7 @@ export default function LiveMonitoringPage() {
                         <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-lg font-bold">REAL-TIME</span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {activeStudents.length === 0 ? (
                             <div className="md:col-span-2 bg-white rounded-2xl border border-dashed border-gray-300 py-16 text-center">
                                 <Users size={48} className="mx-auto text-gray-200 mb-4" />
@@ -193,7 +208,7 @@ export default function LiveMonitoringPage() {
                                             <div className="flex items-center gap-3 mt-3">
                                                 <div className="text-[11px] text-gray-400 flex items-center gap-1">
                                                     <Clock size={12} />
-                                                    {new Date(student.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {formatTime(student.timestamp)}
                                                 </div>
                                                 <div className="text-[11px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
                                                     ID: {student.userId}
@@ -257,7 +272,7 @@ export default function LiveMonitoringPage() {
                                                     <div className="flex justify-between items-start">
                                                         <p className="font-bold text-gray-900 text-xs truncate">{violation.userId}</p>
                                                         <span className="text-[10px] text-gray-400 font-medium">
-                                                            {new Date(violation.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                            {formatTime(violation.timestamp)}
                                                         </span>
                                                     </div>
                                                     <p className={`text-[10px] font-black uppercase mt-0.5 tracking-tight ${colorClass.split(' ')[0]}`}>
@@ -285,7 +300,7 @@ export default function LiveMonitoringPage() {
                                         <p className="text-[11px] font-black">{submit.userId}</p>
                                         <p className="text-[10px] text-red-100 mt-1 line-clamp-1 opacity-90">{submit.reason}</p>
                                         <p className="text-[9px] mt-2 font-bold text-white/50 uppercase tracking-tighter">
-                                            Terminated @ {new Date(submit.timestamp).toLocaleTimeString()}
+                                            Terminated @ {formatTime(submit.timestamp)}
                                         </p>
                                     </div>
                                 ))}
@@ -316,8 +331,8 @@ export default function LiveMonitoringPage() {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                                 {/* Left Column: Latest Feed */}
                                 <div className="space-y-6">
                                     <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">Live Webcam Feed</h3>
@@ -386,7 +401,7 @@ export default function LiveMonitoringPage() {
                                                             <div key={i} className={`p-4 rounded-2xl border-l-4 flex items-center justify-between shadow-sm bg-white ${color.split(' ')[2]}`}>
                                                                 <div>
                                                                     <p className={`text-[10px] font-black uppercase ${color.split(' ')[0]}`}>{v.violationType.replace(/_/g, ' ')}</p>
-                                                                    <p className="text-[9px] text-gray-400 font-bold mt-0.5">{new Date(v.timestamp).toLocaleTimeString()}</p>
+                                                                    <p className="text-[9px] text-gray-400 font-bold mt-0.5">{formatTime(v.timestamp)}</p>
                                                                 </div>
                                                                 <AlertTriangle size={16} className={color.split(' ')[0]} />
                                                             </div>
@@ -408,7 +423,7 @@ export default function LiveMonitoringPage() {
                                                 if (confirm(`Are you sure you want to terminate ${selectedStudent.studentName}'s test?`)) {
                                                     const adminName = user?.name || user?.email || "Admin";
                                                     socketService.emitTerminateTest(selectedStudent.testResponseId, "Policy Violation (Admin Action)", adminName);
-                                                    alert("Termination command sent.");
+                                                    toast.success("Termination command sent.");
                                                 }
                                             }}
                                             className="flex-1 bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-100 transition-all active:scale-95"

@@ -1,14 +1,26 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { requestOTP, verifyOTP } from "../../api/testSystemApi";
 import { Lock, User, ArrowRight, ShieldCheck, Clock, AlertTriangle, Camera, CheckCircle, XCircle, Video } from "lucide-react";
+import toast from "react-hot-toast";
+
+const formatISO = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().replace('T', ' ').slice(0, 16);
+};
 
 export default function TestAccessPage() {
     const { testId } = useParams();
     const navigate = useNavigate();
 
+
+    const [searchParams] = useSearchParams();
+    const userIdFromUrl = searchParams.get("userId");
+
     const [step, setStep] = useState(1); // 1: Login, 2: OTP, 3: Instructions, 4: Permission Check
-    const [userId, setUserId] = useState("");
+    const [userId, setUserId] = useState(userIdFromUrl || "");
     const [otp, setOtp] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -19,9 +31,10 @@ export default function TestAccessPage() {
     // Webcam permission state
     const [cameraPermission, setCameraPermission] = useState("pending"); // pending, granted, denied, checking
     const [cameraStream, setCameraStream] = useState(null);
+    const [cameraError, setCameraError] = useState(""); // Specific error message for camera issues
     const videoRef = useRef(null);
 
-    // Check if already logged in
+    // Check if already logged in or has pre-filled ID
     useEffect(() => {
         const token = localStorage.getItem("testToken");
         const storedTestId = localStorage.getItem("currentTestId");
@@ -35,7 +48,13 @@ export default function TestAccessPage() {
                 if (storedTest) setTestInfo(storedTest);
             } catch (e) { }
         }
-    }, [testId]);
+
+        // Pre-fill userId from URL if available
+        const urlUserId = searchParams.get("userId");
+        if (urlUserId) {
+            setUserId(urlUserId);
+        }
+    }, [testId, searchParams]);
 
     // Cleanup camera stream on unmount
     useEffect(() => {
@@ -127,7 +146,16 @@ export default function TestAccessPage() {
 
     const requestCameraPermission = async () => {
         setCameraPermission("checking");
-        setError("");
+        setCameraError(""); // Clear previous camera errors
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.error("MediaDevices API not found. This might be due to a non-secure context (HTTP) or unsupported browser.");
+            setCameraPermission("denied");
+            const msg = "Camera API is not accessible. Please ensure you are using HTTPS or localhost, and that your browser supports camera access.";
+            setCameraError(msg);
+            toast.error(msg);
+            return;
+        }
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -141,12 +169,18 @@ export default function TestAccessPage() {
             console.error("Camera permission error:", err);
             setCameraPermission("denied");
 
-            if (err.name === "NotAllowedError") {
-                setError("Camera access denied. Please allow camera access to proceed with the test.");
-            } else if (err.name === "NotFoundError") {
-                setError("No camera found. Please connect a camera and try again.");
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                const msg = "Camera access denied. Please allow camera permissions in your browser settings to continue.";
+                setCameraError(msg);
+                toast.error(msg);
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                const msg = "No camera found. A working camera is required for this test.";
+                setCameraError(msg);
+                toast.error(msg);
             } else {
-                setError("Failed to access camera: " + err.message);
+                const msg = "Failed to access camera: " + err.message;
+                setCameraError(msg);
+                toast.error(msg);
             }
         }
     };
@@ -305,7 +339,7 @@ export default function TestAccessPage() {
                                             })()}
                                         </div>
                                         <p className="text-xs text-amber-600 mt-2">
-                                            Starts at: {new Date(testInfo.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            Starts at: {formatISO(testInfo.startTime).slice(11, 16)}
                                         </p>
                                     </div>
                                 ) : (

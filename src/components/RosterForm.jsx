@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 
 const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -78,7 +79,7 @@ export default function RosterForm({ onCreate, classes = [] }) {
 
   const handleCreate = () => {
     if (!selectedClassId) {
-      alert("Please select a class");
+      toast.error("Please select a class");
       return;
     }
     const selectedClass = classes.find(c => c._id === selectedClassId);

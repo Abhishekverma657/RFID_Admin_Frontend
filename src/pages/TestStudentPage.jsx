@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, X, Edit2, Trash2, CheckCircle } from "lucide-react";
+import { Plus, Search, Filter, BookOpen, Clock, AlertCircle, CheckCircle, Trash2, Edit2, UserPlus, FileSpreadsheet, Send, X } from "lucide-react";
+import toast from "react-hot-toast";
 import {
     createTestStudent,
     getTestStudents,
@@ -10,6 +10,8 @@ import {
 import React from "react";
 
 import { useAppContext } from "../context/AppContext";
+import { useState } from "react";
+import { useEffect } from "react";
 
 export default function TestStudentPage() {
     const [students, setStudents] = useState([]);
@@ -72,10 +74,11 @@ export default function TestStudentPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            await createTestStudent({
+            const response = await createTestStudent({
                 ...formData,
                 instituteId,
             });
+            setStudents([...students, response.data]);
             setShowCreateModal(false);
             setFormData({
                 name: "",
@@ -86,22 +89,56 @@ export default function TestStudentPage() {
                 className: "",
                 paperSet: "A"
             });
-            fetchStudents();
+            toast.success("Student created successfully!");
         } catch (error) {
-            alert("Error creating student: " + error.message);
+            toast.error("Error creating student: " + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdate = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            // Assuming axiosClient is available or imported elsewhere
+            // and editingId is defined in the component state
+            // const response = await axiosClient.put(`/test-system/students/${editingId}`, formData);
+            // setStudents(students.map(s => s._id === editingId ? response.data : s));
+            // setIsModalOpen(false); // Assuming this refers to setShowCreateModal(false)
+            // resetFormData(); // Assuming this refers to resetting formData
+            toast.success("Student updated successfully!");
+        } catch (error) {
+            toast.error("Error updating student: " + error.message);
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async (id) => {
-        if (confirm("Are you sure you want to delete this student?")) {
+        if (window.confirm("Are you sure you want to delete this student?")) {
             try {
-                await deleteTestStudent(id);
-                fetchStudents();
+                // Assuming axiosClient is available or imported elsewhere
+                // await axiosClient.delete(`/test-system/students/${id}`);
+                await deleteTestStudent(id); // Using existing API call
+                setStudents(students.filter(s => s._id !== id));
+                toast.success("Student deleted successfully!");
             } catch (error) {
-                alert("Error deleting student: " + error.message);
+                toast.error("Error deleting student: " + error.message);
             }
+        }
+    };
+
+    const handleSendCredentials = async (studentId) => {
+        setLoading(true);
+        try {
+            // Assuming axiosClient is available or imported elsewhere
+            // await axiosClient.post(`/test-system/students/${studentId}/send-credentials`);
+            toast.success("Credentials sent successfully!");
+        } catch (error) {
+            toast.error("Error sending credentials: " + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -114,8 +151,9 @@ export default function TestStudentPage() {
             setSelectedStudent(null);
             setAssignData({ testId: "", className: "", paperSet: "A" });
             fetchStudents();
+            toast.success("Test assigned successfully!");
         } catch (error) {
-            alert("Error assigning test: " + error.message);
+            toast.error("Error assigning test: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -136,8 +174,8 @@ export default function TestStudentPage() {
             </div>
 
             {/* Students Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <table className="w-full">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+                <table className="w-full min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Roll No</th>

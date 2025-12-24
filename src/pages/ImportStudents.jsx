@@ -1,6 +1,5 @@
- 
-
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
 import AdminLayout from "../layouts/AdminLayout";
 import FileUploadBox from "../components/FileUploadBox";
@@ -45,81 +44,81 @@ export default function ImportStudents() {
   };
 
   // VALIDATION
-   const validate = (rows) => {
-  const err = {};
-  const classSectionRollSet = new Set();
-  const rfidSet = new Set();
+  const validate = (rows) => {
+    const err = {};
+    const classSectionRollSet = new Set();
+    const rfidSet = new Set();
 
-  rows.forEach((r, i) => {
-    // 🔹 normalize column access (case-safe)
-    const cls = String(r.ClassName ?? r.className ?? "").trim();
-    const sec = String(r.Section ?? r.section ?? "").trim();
-    const roll = String(r.RollNo ?? r.rollNo ?? "").trim();
-    const rfid = String(
-      r.RfidCardId ?? r.RFIDCardId ?? r.rfidCardId ?? ""
-    ).trim();
+    rows.forEach((r, i) => {
+      // 🔹 normalize column access (case-safe)
+      const cls = String(r.ClassName ?? r.className ?? "").trim();
+      const sec = String(r.Section ?? r.section ?? "").trim();
+      const roll = String(r.RollNo ?? r.rollNo ?? "").trim();
+      const rfid = String(
+        r.RfidCardId ?? r.RFIDCardId ?? r.rfidCardId ?? ""
+      ).trim();
 
-    // 1️⃣ required
-    if (!cls || !sec || !roll || !rfid) {
-      err[i] = "Class, Section, RollNo & RFID required";
-      return;
-    }
+      // 1️⃣ required
+      if (!cls || !sec || !roll || !rfid) {
+        err[i] = "Class, Section, RollNo & RFID required";
+        return;
+      }
 
-    // 2️⃣ Roll unique per Class + Section
-    const rollKey = `${cls}-${sec}-${roll}`;
-    if (classSectionRollSet.has(rollKey)) {
-      err[i] = `Duplicate RollNo ${roll} in Class ${cls} Section ${sec}`;
-      return;
-    }
-    classSectionRollSet.add(rollKey);
+      // 2️⃣ Roll unique per Class + Section
+      const rollKey = `${cls}-${sec}-${roll}`;
+      if (classSectionRollSet.has(rollKey)) {
+        err[i] = `Duplicate RollNo ${roll} in Class ${cls} Section ${sec}`;
+        return;
+      }
+      classSectionRollSet.add(rollKey);
 
-    // 3️⃣ RFID globally unique
-    if (rfidSet.has(rfid)) {
-      err[i] = "Duplicate RFID";
-      return;
-    }
-    rfidSet.add(rfid);
-  });
+      // 3️⃣ RFID globally unique
+      if (rfidSet.has(rfid)) {
+        err[i] = "Duplicate RFID";
+        return;
+      }
+      rfidSet.add(rfid);
+    });
 
-  setErrors(err);
-  return Object.keys(err).length === 0;
-};
+    setErrors(err);
+    return Object.keys(err).length === 0;
+  };
 
 
- const normalizeRows = (rows) => {
-  return rows.map((r) => ({
-    RollNo: String(r.RollNo ?? r.rollNo ?? "").trim(),
-    Name: String(r.Name ?? r.name ?? "").trim(),
-    ClassName: String(r.ClassName ?? r.Class ?? r.class ?? "").trim(),
-    Section: String(r.Section ?? r.section ?? "").trim(),
-    Email: r.Email ?? "",
-    Phone: r.Phone ?? "",
-    RfidCardId: String(
-      r.RfidCardId ?? r.RFID ?? r.rfid ?? ""
-    ).trim(),
-    FaceId: r.FaceId ?? null, // optional → null ok
-  }));
-};
+  const normalizeRows = (rows) => {
+    return rows.map((r) => ({
+      RollNo: String(r.RollNo ?? r.rollNo ?? "").trim(),
+      Name: String(r.Name ?? r.name ?? "").trim(),
+      ClassName: String(r.ClassName ?? r.Class ?? r.class ?? "").trim(),
+      Section: String(r.Section ?? r.section ?? "").trim(),
+      Email: r.Email ?? "",
+      Phone: r.Phone ?? "",
+      RfidCardId: String(
+        r.RfidCardId ?? r.RFID ?? r.rfid ?? ""
+      ).trim(),
+      FaceId: r.FaceId ?? null, // optional → null ok
+    }));
+  };
 
 
 
   // FINAL IMPORT
- const handleImport = async () => {
-  const normalized = normalizeRows(preview);
+  const handleImport = async () => {
+    const normalized = normalizeRows(preview);
 
-  if (!validate(normalized)) {
-    alert("Fix validation errors first");
-    return;
-  }
+    if (!validate(normalized)) {
+      toast.error("Fix validation errors first");
+      return;
+    }
 
-  try {
-    await importStudents({ students: normalized });
-    alert("Students imported successfully");
-    setPreview([]);
-  } catch (err) {
-    alert("Import failed");
-  }
-};
+    try {
+      await importStudents({ students: normalized });
+      toast.success("Students imported successfully");
+      setPreview([]);
+    } catch (err) {
+      toast.error("Import failed");
+    }
+  };
 
 
   return (

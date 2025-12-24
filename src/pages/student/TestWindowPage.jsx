@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { startTest, saveAnswer, submitTest, logViolation, uploadSnapshot, getTimeRemaining } from "../../api/testSystemApi";
-import { Clock, AlertTriangle, Monitor, CheckCircle, ChevronLeft, ChevronRight, Save, Menu, Camera, Video, VideoOff, Activity } from "lucide-react";
+import { startTest, saveAnswer, submitTest, logViolation, uploadSnapshot } from "../../api/testSystemApi";
+import { Clock, Send, AlertTriangle, Monitor, Shield, ShieldAlert, Wifi, WifiOff, Camera, Maximize, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import toast from "react-hot-toast";
 import socketService from "../../utils/socketService";
 
 export default function TestWindowPage() {
@@ -145,11 +146,11 @@ export default function TestWindowPage() {
                         setFinalSubmitType("auto-violation"); // Treat as violation for UI
                         setIsSubmitted(true);
                         localStorage.removeItem("testToken");
-                        alert(`Crucial: Your test has been terminated by the administrator.\nReason: ${data.reason}`);
+                        toast.error(`Crucial: Your test has been terminated by the administrator.\nReason: ${data.reason} `, { duration: 10000 });
                     });
 
                     socketService.onWarningFromAdmin((data) => {
-                        alert(`⚠️ WARNING FROM ADMINISTRATOR:\n\n${data.message}\n\nPlease follow the guidelines to avoid termination.`);
+                        toast.warn(`⚠️ WARNING FROM ADMINISTRATOR: \n\n${data.message} \n\nPlease follow the guidelines to avoid termination.`, { duration: 8000 });
                     });
 
                     setLoading(false);
@@ -162,7 +163,7 @@ export default function TestWindowPage() {
 
         const token = localStorage.getItem("testToken");
         if (!token) {
-            navigate(`/test/${testId}`);
+            navigate(`/ test / ${testId} `);
             return;
         }
 
@@ -277,7 +278,7 @@ export default function TestWindowPage() {
                 socketService.notifyAutoSubmit({
                     testStudentId,
                     testResponseId,
-                    reason: `${type} violation (Fatal)`
+                    reason: `${type} violation(Fatal)`
                 });
 
                 // Stop camera
@@ -287,6 +288,7 @@ export default function TestWindowPage() {
                 setFinalSubmitType("auto-violation");
                 setIsSubmitted(true);
                 localStorage.removeItem("testToken");
+                toast.error(`Crucial: Your test has been auto - submitted due to a ${type} violation.`, { duration: 10000 });
             } else {
                 // Notify violation via socket
                 socketService.sendViolation({
@@ -298,12 +300,13 @@ export default function TestWindowPage() {
 
                 if (res.data?.warning) {
                     // Show warning
-                    alert(`${res.data.warning.message}\nPlease avoid this action to prevent auto-submission.`);
+                    toast.warn(`${res.data.warning.message} \nPlease avoid this action to prevent auto - submission.`, { duration: 8000 });
                 }
                 console.warn("Violation logged:", type);
             }
         } catch (e) {
             console.error("Failed to log violation", e);
+            toast.error("Failed to log violation.");
         }
     };
 
@@ -320,6 +323,7 @@ export default function TestWindowPage() {
             });
         } catch (e) {
             console.error("Failed to save answer", e);
+            toast.error("Failed to save answer.");
         }
     };
 
@@ -342,12 +346,12 @@ export default function TestWindowPage() {
                 cameraStream.getTracks().forEach(track => track.stop());
             }
 
-            // alert("Test Submitted Successfully!"); // Replaced with Thank You screen
             localStorage.removeItem("testToken");
             setFinalSubmitType(type);
             setIsSubmitted(true);
+            toast.success("Test submitted successfully!");
         } catch (e) {
-            alert("Submission failed: " + e.message);
+            toast.error("Submission failed: " + e.message);
             setIsSubmitting(false);
         }
     };
@@ -407,7 +411,7 @@ export default function TestWindowPage() {
                     <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
                     <h2 className="text-xl font-bold text-gray-800 mb-2">Access Denied</h2>
                     <p className="text-gray-600">{error}</p>
-                    <button onClick={() => navigate(`/test/${testId}`)} className="mt-4 text-blue-600 hover:underline">
+                    <button onClick={() => navigate(`/ test / ${testId} `)} className="mt-4 text-blue-600 hover:underline">
                         Return to Login
                     </button>
                 </div>
@@ -419,7 +423,13 @@ export default function TestWindowPage() {
     const formatTime = (seconds) => {
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
-        return `${m}:${s.toString().padStart(2, '0')}`;
+        return `${m}:${s.toString().padStart(2, '0')} `;
+    };
+
+    const handleManualSubmit = () => {
+        if (window.confirm("Are you sure you want to submit your test?")) {
+            handleSubmitTest("manual");
+        }
     };
 
     return (
@@ -437,36 +447,36 @@ export default function TestWindowPage() {
 
                 <div className="flex items-center gap-4">
                     {/* Socket Status Indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${socketConnected
-                        ? "bg-blue-50 text-blue-700 border border-blue-100"
-                        : "bg-red-50 text-red-700 border border-red-100"
-                        }`}>
-                        <div className={`w-2 h-2 rounded-full ${socketConnected ? "bg-blue-500 animate-pulse" : "bg-red-500"}`}></div>
-                        <Activity size={16} />
+                    <div className={`flex items - center gap - 2 px - 3 py - 1.5 rounded - lg text - sm font - medium ${socketConnected
+                            ? "bg-blue-50 text-blue-700 border border-blue-100"
+                            : "bg-red-50 text-red-700 border border-red-100"
+                        } `}>
+                        <div className={`w - 2 h - 2 rounded - full ${socketConnected ? "bg-blue-500 animate-pulse" : "bg-red-500"} `}></div>
+                        <Wifi size={16} />
                         <span className="hidden sm:inline">{socketConnected ? "Proctoring Active" : "Proctoring Offline"}</span>
                     </div>
 
                     {/* Camera Status Indicator */}
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${cameraActive
-                        ? "bg-green-50 text-green-700"
-                        : "bg-red-50 text-red-700"
-                        }`}>
+                    <div className={`flex items - center gap - 2 px - 3 py - 1.5 rounded - lg text - sm font - medium ${cameraActive
+                            ? "bg-green-50 text-green-700"
+                            : "bg-red-50 text-red-700"
+                        } `}>
                         {cameraActive ? (
                             <>
                                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                <Video size={16} />
+                                <Camera size={16} />
                                 <span className="hidden sm:inline">Camera On</span>
                             </>
                         ) : (
                             <>
-                                <VideoOff size={16} />
+                                <WifiOff size={16} />
                                 <span className="hidden sm:inline">Camera Off</span>
                             </>
                         )}
                     </div>
 
                     {/* Timer */}
-                    <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-1.5 rounded-lg ${remainingTime < 300 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-800'}`}>
+                    <div className={`flex items - center gap - 2 font - mono text - xl font - bold px - 4 py - 1.5 rounded - lg ${remainingTime < 300 ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-800'} `}>
                         <Clock size={20} />
                         {formatTime(remainingTime)}
                     </div>
@@ -475,7 +485,7 @@ export default function TestWindowPage() {
                         onClick={() => setSidebarOpen(!sidebarOpen)}
                         className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
                     >
-                        <Menu size={24} />
+                        <Maximize size={24} />
                     </button>
                 </div>
             </header>
@@ -510,21 +520,22 @@ export default function TestWindowPage() {
                             {/* Check if we have new options array or legacy fields */}
                             {(currentQ.options && currentQ.options.length > 0
                                 ? currentQ.options.map((opt, i) => ({ ...opt, label: String.fromCharCode(65 + i) }))
-                                : ['A', 'B', 'C', 'D'].map(label => ({ label, text: currentQ[`option${label}`], image: null }))
+                                : ['A', 'B', 'C', 'D'].map(label => ({ label, text: currentQ[`option${label} `], image: null }))
                             ).map((opt, idx) => (
                                 <label
                                     key={idx}
                                     className={`
-                                        flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all gap-4
+                                        flex items - start p - 4 rounded - xl border - 2 cursor - pointer transition - all gap - 4
                                         ${answers[currentQ.id] === opt.label
                                             ? 'border-blue-600 bg-blue-50'
-                                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}
-                                    `}
+                                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                        }
+`}
                                 >
                                     <div className="flex items-center h-full pt-1">
                                         <input
                                             type="radio"
-                                            name={`q-${currentQ.id}`}
+                                            name={`q - ${currentQ.id} `}
                                             value={opt.label}
                                             checked={answers[currentQ.id] === opt.label}
                                             onChange={() => handleAnswerSelect(opt.label)}
@@ -539,7 +550,7 @@ export default function TestWindowPage() {
                                         {opt.image && (
                                             <img
                                                 src={opt.image}
-                                                alt={`Option ${opt.label}`}
+                                                alt={`Option ${opt.label} `}
                                                 className="mt-2 max-h-32 rounded border border-gray-200"
                                             />
                                         )}
@@ -561,11 +572,7 @@ export default function TestWindowPage() {
 
                         {currentQuestionIndex === questions.length - 1 ? (
                             <button
-                                onClick={() => {
-                                    if (confirm("Are you sure you want to finish the test?")) {
-                                        handleSubmitTest("manual");
-                                    }
-                                }}
+                                onClick={handleManualSubmit}
                                 disabled={isSubmitting}
                                 className="flex items-center gap-2 px-8 py-3 rounded-lg font-bold text-white bg-green-600 hover:bg-green-700 shadow-md transition transform hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
@@ -593,10 +600,10 @@ export default function TestWindowPage() {
 
                 {/* Sidebar (Question Palette) */}
                 <aside className={`
-                    fixed inset-y-0 right-0 w-72 bg-white border-l border-gray-200 shadow-xl transform transition-transform duration-300 z-20
-                    md:relative md:transform-none md:shadow-none md:w-80
+                    fixed inset - y - 0 right - 0 w - 72 bg - white border - l border - gray - 200 shadow - xl transform transition - transform duration - 300 z - 20
+md:relative md: transform - none md: shadow - none md: w - 80
                     ${sidebarOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
-                `}>
+`}>
                     <div className="h-full flex flex-col p-4">
                         <div className="flex justify-between items-center mb-4 md:hidden">
                             <h3 className="font-bold text-gray-800">Question Palette</h3>
@@ -670,12 +677,13 @@ export default function TestWindowPage() {
                                                                 setSidebarOpen(false);
                                                             }}
                                                             className={`
-                                                                aspect-square rounded-lg font-semibold text-sm flex items-center justify-center transition
+aspect - square rounded - lg font - semibold text - sm flex items - center justify - center transition
                                                                 ${isCurrent ? 'ring-2 ring-blue-600 ring-offset-2' : ''}
                                                                 ${isAnswered
                                                                     ? 'bg-blue-600 text-white'
-                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
-                                                            `}
+                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                                }
+`}
                                                         >
                                                             {idx + 1}
                                                         </button>

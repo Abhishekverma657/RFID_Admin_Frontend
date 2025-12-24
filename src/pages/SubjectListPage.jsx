@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Search, Plus, Trash2, X, FileText } from "lucide-react";
+import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchSubjects, addSubject, deleteSubject } from "../api/subjectApi";
 
@@ -28,6 +29,7 @@ export default function SubjectListPage() {
             setSubjects(res.data || []);
         } catch (error) {
             console.error("Failed to fetch subjects:", error);
+            toast.error("Failed to load subjects.");
             setSubjects([]);
         }
         setLoading(false);
@@ -43,7 +45,7 @@ export default function SubjectListPage() {
     // Add
     const handleAdd = async () => {
         if (!newSubject.name) {
-            alert("Please enter subject name");
+            toast.error("Please enter subject name");
             return;
         }
         setSaving(true);
@@ -52,8 +54,9 @@ export default function SubjectListPage() {
             setAddModal(false);
             setNewSubject({ name: "" });
             loadSubjects();
+            toast.success("Subject added successfully!");
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to add subject");
+            toast.error(error.response?.data?.message || "Failed to add subject");
         }
         setSaving(false);
     };
@@ -65,8 +68,9 @@ export default function SubjectListPage() {
             await deleteSubject(deleteDialog._id);
             setDeleteDialog(null);
             loadSubjects();
+            toast.success("Subject deleted successfully!");
         } catch (error) {
-            alert("Failed to delete subject");
+            toast.error("Failed to delete subject");
         }
         setDeleting(false);
     };

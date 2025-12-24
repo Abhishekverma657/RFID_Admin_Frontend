@@ -1,8 +1,16 @@
 import { useState, useEffect } from "react";
 import { Eye, Search, CheckCircle, XCircle, MinusCircle, Clock, AlertTriangle, Camera, FileText, BarChart3, X, ChevronLeft, ChevronRight, RefreshCw, Users } from "lucide-react";
+import toast from "react-hot-toast";
 import { getAllResults, getResultDetail, updateReviewStatus } from "../api/testSystemApi";
 import { useAppContext } from "../context/AppContext";
 import React from "react";
+
+const formatISO = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().replace('T', ' ').slice(0, 16);
+};
 
 export default function ResultReviewPage() {
     const [results, setResults] = useState([]);
@@ -31,7 +39,7 @@ export default function ResultReviewPage() {
             setResults(response.data || []);
         } catch (error) {
             console.error("Error fetching results:", error);
-            alert("Error fetching results: " + error.message);
+            toast.error("Error fetching results: " + error.message);
         } finally {
             setFetchingResults(false);
         }
@@ -48,7 +56,7 @@ export default function ResultReviewPage() {
             setActiveTab("summary");
             setSnapshotIndex(0);
         } catch (error) {
-            alert("Error fetching result detail: " + error.message);
+            toast.error("Error fetching result detail: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -99,7 +107,16 @@ export default function ResultReviewPage() {
         const diffMs = end - start;
         const mins = Math.floor(diffMs / 60000);
         const secs = Math.floor((diffMs % 60000) / 1000);
-        return `${mins}m ${secs}s`;
+
+        const isoStart = formatISO(startTime).slice(11, 16);
+        const isoEnd = formatISO(endTime).slice(11, 16);
+
+        return (
+            <div className="flex flex-col">
+                <span className="font-medium">{mins}m {secs}s</span>
+                <span className="text-[10px] text-gray-400">{isoStart} - {isoEnd}</span>
+            </div>
+        );
     };
 
     return (
@@ -291,8 +308,8 @@ export default function ResultReviewPage() {
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-500">Submit Type</span>
                                                     <span className={`px-2 py-0.5 rounded text-xs ${detailData.examSummary.submitType === "manual" ? "bg-blue-100 text-blue-700" :
-                                                            detailData.examSummary.submitType === "admin-terminated" ? "bg-red-100 text-red-700" :
-                                                                "bg-orange-100 text-orange-700"
+                                                        detailData.examSummary.submitType === "admin-terminated" ? "bg-red-100 text-red-700" :
+                                                            "bg-orange-100 text-orange-700"
                                                         }`}>
                                                         {detailData.examSummary.submitType}
                                                     </span>
@@ -310,12 +327,12 @@ export default function ResultReviewPage() {
                                                     </div>
                                                 )}
                                                 <div className="flex justify-between">
-                                                    <span className="text-gray-500">Start Time</span>
-                                                    <span className="font-medium">{new Date(detailData.examSummary.startTime).toLocaleString()}</span>
+                                                    <span className="text-gray-500">Start Time (ISO)</span>
+                                                    <span className="font-medium font-mono">{formatISO(detailData.examSummary.startTime)}</span>
                                                 </div>
                                                 <div className="flex justify-between">
-                                                    <span className="text-gray-500">End Time</span>
-                                                    <span className="font-medium">{new Date(detailData.examSummary.endTime).toLocaleString()}</span>
+                                                    <span className="text-gray-500">End Time (ISO)</span>
+                                                    <span className="font-medium font-mono">{formatISO(detailData.examSummary.endTime)}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -471,7 +488,7 @@ export default function ResultReviewPage() {
                                                     <div className="flex-1">
                                                         <p className="font-semibold text-red-800">{violation.type.replace(/_/g, " ")}</p>
                                                         <p className="text-sm text-red-600">
-                                                            {new Date(violation.timestamp).toLocaleString()}
+                                                            {formatISO(violation.timestamp)}
                                                         </p>
                                                     </div>
                                                     <span className="text-xs bg-red-200 text-red-800 px-2 py-1 rounded">
@@ -503,7 +520,7 @@ export default function ResultReviewPage() {
                                                     className="w-full h-full object-contain"
                                                 />
                                                 <div className="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-1 rounded-lg text-sm">
-                                                    {snapshotIndex + 1} / {detailData.snapshots.length} • {new Date(detailData.snapshots[snapshotIndex]?.timestamp).toLocaleTimeString()}
+                                                    {snapshotIndex + 1} / {detailData.snapshots.length} • {formatISO(detailData.snapshots[snapshotIndex]?.timestamp).slice(11, 19)}
                                                 </div>
 
                                                 {/* Navigation */}

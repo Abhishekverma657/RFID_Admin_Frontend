@@ -5,6 +5,7 @@ import FileUploadBox from "../components/FileUploadBox";
 import PreviewTable from "../components/PreviewTable";
 import SampleDownloadBox from "../components/SampleDownloadBox";
 import { importTeachers } from "../api/institute_admin/teacher_api";
+import toast from "react-hot-toast";
 
 export default function ImportTeachers() {
   const [preview, setPreview] = useState([]);
@@ -79,8 +80,8 @@ export default function ImportTeachers() {
       Subjects: Array.isArray(r.Subjects)
         ? r.Subjects
         : typeof r.Subjects === "string"
-        ? r.Subjects.split(",").map((s) => s.trim())
-        : [],
+          ? r.Subjects.split(",").map((s) => s.trim())
+          : [],
     }));
   };
 
@@ -89,16 +90,16 @@ export default function ImportTeachers() {
     const normalized = normalizeRows(preview);
 
     if (!validate(normalized)) {
-      alert("Fix validation errors first");
+      toast.error("Fix validation errors first");
       return;
     }
 
     try {
       await importTeachers({ teachers: normalized });
-      alert("Teachers imported successfully");
+      toast.success("Teachers imported successfully");
       setPreview([]);
     } catch (err) {
-      alert("Import failed");
+      toast.error("Import failed");
     }
   };
 

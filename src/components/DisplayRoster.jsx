@@ -3,6 +3,7 @@ import RosterTable from "./RosterTable";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { toPng } from "html-to-image";
+import toast from "react-hot-toast";
 
 export default function DisplayRoster({ roster, rosters, teachers, subjects, onEdit, onSave, onDelete }) {
     const [isEditing, setIsEditing] = useState(roster.isDraft);
@@ -62,7 +63,7 @@ export default function DisplayRoster({ roster, rosters, teachers, subjects, onE
             link.click();
         } catch (error) {
             console.error("PNG export failed:", error);
-            alert("Failed to export PNG");
+            toast.error("Failed to export PNG");
         }
     };
 
@@ -125,7 +126,7 @@ export default function DisplayRoster({ roster, rosters, teachers, subjects, onE
             };
         } catch (error) {
             console.error("PDF export failed:", error);
-            alert("Failed to export PDF");
+            toast.error("Failed to export PDF");
         }
     };
 

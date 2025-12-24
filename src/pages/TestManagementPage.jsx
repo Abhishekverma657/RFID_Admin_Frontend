@@ -1,8 +1,24 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, X, Clock, AlertCircle, Link as LinkIcon, FileQuestion, BookOpen } from "lucide-react";
+import toast from "react-hot-toast";
 import { createTest, getTests, updateTest, deleteTest, getQuestionPapers } from "../api/testSystemApi";
 import { useAppContext } from "../context/AppContext";
 import React from "react";
+
+const toLocalISO = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
+
+const formatISO = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().replace('T', ' ').slice(0, 16);
+};
+
 export default function TestManagementPage() {
     const [tests, setTests] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -57,7 +73,7 @@ export default function TestManagementPage() {
             const response = await getTests(instituteId);
             setTests(response.data);
         } catch (error) {
-            alert("Error fetching tests: " + error.message);
+            toast.error("Error fetching tests: " + error.message);
         }
     };
 
@@ -117,14 +133,16 @@ export default function TestManagementPage() {
 
             if (isEditing) {
                 await updateTest(currentTestId, payload);
+                toast.success("Test updated successfully!");
             } else {
                 await createTest(payload);
+                toast.success("Test created successfully!");
             }
 
             fetchTests();
             handleCloseModal();
         } catch (error) {
-            alert("Error saving test: " + error.message);
+            toast.error("Error saving test: " + error.message);
         } finally {
             setLoading(false);
         }
@@ -149,8 +167,8 @@ export default function TestManagementPage() {
             fullScreenEnforced: config.fullScreenEnforced ?? true,
             webcamRequired: config.webcamRequired ?? true,
             deviceRestriction: config.deviceRestriction || "any",
-            startTime: test.startTime ? new Date(test.startTime).toISOString().slice(0, 16) : "",
-            endTime: test.endTime ? new Date(test.endTime).toISOString().slice(0, 16) : "",
+            startTime: test.startTime ? toLocalISO(test.startTime) : "",
+            endTime: test.endTime ? toLocalISO(test.endTime) : "",
         });
         setShowModal(true);
     };
@@ -160,8 +178,9 @@ export default function TestManagementPage() {
             try {
                 await deleteTest(id);
                 fetchTests();
+                toast.success("Test deleted successfully!");
             } catch (error) {
-                alert("Error deleting test: " + error.message);
+                toast.error("Error deleting test: " + error.message);
             }
         }
     };
@@ -169,7 +188,7 @@ export default function TestManagementPage() {
     const handleCopyLink = (testId) => {
         const link = `${window.location.origin}/test/${testId}`;
         navigator.clipboard.writeText(link);
-        alert("Test link copied to clipboard!");
+        toast.success("Test link copied to clipboard!");
     };
 
     const handleCloseModal = () => {
@@ -209,7 +228,7 @@ export default function TestManagementPage() {
             </div>
 
             {/* Test List Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tests.map((test) => (
                     <div key={test._id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition">
                         <div className="flex justify-between items-start mb-4">
@@ -255,6 +274,20 @@ export default function TestManagementPage() {
                             </div>
                         </div>
 
+                        {test.startTime && test.endTime && (
+                            <div className="mb-4 space-y-1">
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Timing (ISO)</p>
+                                <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <div className="flex-1">
+                                        <span className="font-bold text-blue-600">S:</span> {formatISO(test.startTime)}
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className="font-bold text-indigo-600">E:</span> {formatISO(test.endTime)}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
                             <FileQuestion size={16} className="text-blue-600" />
                             <span className="text-sm font-medium text-blue-900">
@@ -296,8 +329,8 @@ export default function TestManagementPage() {
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
-                            <h2 className="text-2xl font-bold text-gray-800">
+                        <div className="flex justify-between items-center p-4 md:p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
+                            <h2 className="text-xl md:text-2xl font-bold text-gray-800">
                                 {isEditing ? "Edit Test" : "Create New Test"}
                             </h2>
                             <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
@@ -305,7 +338,7 @@ export default function TestManagementPage() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                        <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-6">
                             {/* Basic Details */}
                             <div className="space-y-4">
                                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Basic Details</h3>

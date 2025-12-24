@@ -7,6 +7,7 @@ import ExportButtons from "../components/ExportButtons";
 import { fetchRosters, fetchTeachers, saveRoster, deleteRoster, fetchClasses, fetchSubjects } from "../api/rosterApi";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
+import toast from "react-hot-toast";
 
 export default function RosterPage() {
   const [rosters, setRosters] = useState([]);
@@ -77,10 +78,10 @@ export default function RosterPage() {
 
       // Reload to get real ID and confirmed data
       loadData();
-      alert("Roster Saved to Database!");
+      toast.success("Roster Saved to Database!");
     } catch (err) {
       console.error(err);
-      alert("Error saving roster: " + (err.response?.data?.message || err.message));
+      toast.error("Error saving roster: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -97,7 +98,7 @@ export default function RosterPage() {
       setRosters(prev => prev.filter(r => r._id !== id));
     } catch (err) {
       console.error(err);
-      alert("Failed to delete");
+      toast.error("Failed to delete");
     }
   };
 
@@ -162,14 +163,14 @@ export default function RosterPage() {
   const exportAllRostersToPDF = async () => {
     const savedRosters = rosters.filter(r => !r.isDraft);
     if (savedRosters.length === 0) {
-      alert("No saved rosters to export");
+      toast.error("No saved rosters to export");
       return;
     }
 
     try {
       const allTables = document.querySelectorAll('[data-roster-table]');
       if (allTables.length === 0) {
-        alert("No roster tables found");
+        toast.error("No roster tables found");
         return;
       }
 
@@ -222,7 +223,7 @@ export default function RosterPage() {
       pdf.save(`all-rosters-${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error("Export all PDF failed:", error);
-      alert("Failed to export all rosters as PDF: " + error.message);
+      toast.error("Failed to export all rosters as PDF: " + error.message);
     }
   };
 

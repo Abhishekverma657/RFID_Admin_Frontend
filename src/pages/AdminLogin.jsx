@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { login } from "../api/auth"; // Import the login API function
 import { useAppContext } from "../context/AppContext";
+import toast from "react-hot-toast";
 
 export default function AdminLogin() {
   const [role, setRole] = useState("admin");
@@ -29,7 +30,8 @@ export default function AdminLogin() {
     }
 
     try {
-      const res = await login({ email, password });
+      const roleType = role === "super" ? "SUPER_ADMIN" : "ADMIN";
+      const res = await login({ email, password, roleType });
       const { token, user } = res;
       setToken(token);
       setUser(user);
@@ -45,6 +47,7 @@ export default function AdminLogin() {
 
   const triggerError = (msg) => {
     setError(msg);
+    toast.error(msg);
     setShake(true);
     setTimeout(() => setShake(false), 500);
   };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Search, Plus, Trash2, X, BookOpen } from "lucide-react";
+import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchClasses, addClass, deleteClass } from "../api/classApi";
 
@@ -28,6 +29,7 @@ export default function ClassListPage() {
             setClasses(res.data || []);
         } catch (error) {
             console.error("Failed to fetch classes:", error);
+            toast.error("Failed to fetch classes."); // Use toast for error
             setClasses([]);
         }
         setLoading(false);
@@ -47,7 +49,7 @@ export default function ClassListPage() {
     // Add
     const handleAdd = async () => {
         if (!newClass.name || !newClass.section) {
-            alert("Please fill all fields");
+            toast.error("Please fill all fields"); // Use toast for validation
             return;
         }
         setSaving(true);
@@ -56,8 +58,9 @@ export default function ClassListPage() {
             setAddModal(false);
             setNewClass({ name: "", section: "" });
             loadClasses();
+            toast.success("Class added successfully!"); // Use toast for success
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to add class");
+            toast.error(error.response?.data?.message || "Failed to add class"); // Use toast for error
         }
         setSaving(false);
     };
@@ -69,8 +72,9 @@ export default function ClassListPage() {
             await deleteClass(deleteDialog._id);
             setDeleteDialog(null);
             loadClasses();
+            toast.success("Class deleted successfully!"); // Use toast for success
         } catch (error) {
-            alert("Failed to delete class");
+            toast.error("Failed to delete class"); // Use toast for error
         }
         setDeleting(false);
     };

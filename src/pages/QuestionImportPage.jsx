@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Trash2, List, MoveUp, MoveDown, Edit, Save, Plus, ImageIcon } from "lucide-react";
+import toast from "react-hot-toast";
 import { importQuestions, getQuestions, getQuestionPapers, deleteQuestionPaper, reorderQuestions, deleteQuestion } from "../api/testSystemApi";
 import { useAppContext } from "../context/AppContext";
 import QuestionEditor from "./QuestionEditor";
@@ -54,8 +55,9 @@ export default function QuestionImportPage() {
                 await deleteQuestionPaper(id);
                 fetchQuestionPapers();
                 if (showPreview) setShowPreview(false);
+                toast.success("Question paper deleted successfully!");
             } catch (error) {
-                alert("Error deleting paper: " + error.message);
+                toast.error("Error deleting paper: " + error.message);
             }
         }
     };
@@ -90,7 +92,7 @@ export default function QuestionImportPage() {
                 "text/csv"
             ];
             if (!validTypes.includes(selectedFile.type) && !selectedFile.name.endsWith('.csv')) {
-                alert("Please select a valid Excel file (.xls, .xlsx) or CSV file (.csv)");
+                toast.error("Please select a valid Excel file (.xls, .xlsx) or CSV file (.csv)");
                 return;
             }
             setFile(selectedFile);
@@ -100,15 +102,15 @@ export default function QuestionImportPage() {
 
     const handleImport = async () => {
         if (!file) {
-            alert("Please select a file first.");
+            toast.error("Please select a file first.");
             return;
         }
         if (!instituteId) {
-            alert("Institute ID not found. Please log in again.");
+            toast.error("Institute ID not found. Please log in again.");
             return;
         }
         if (!paperDetails.title || !paperDetails.className || !paperDetails.paperSet) {
-            alert("Please fill in Paper Title, Class, and Set.");
+            toast.error("Please fill in Paper Title, Class, and Set.");
             return;
         }
 
@@ -130,9 +132,12 @@ export default function QuestionImportPage() {
             if (response.data.imported > 0) {
                 setSelectedPaperId(response.data.questionPaperId);
                 await fetchImportedQuestions();
+                toast.success(`${response.data.imported} questions imported successfully!`);
+            } else {
+                toast.error("No questions were imported. Please check your file.");
             }
         } catch (error) {
-            alert("Error importing questions: " + (error.response?.data?.message || error.message));
+            toast.error("Error importing questions: " + (error.response?.data?.message || error.message));
         } finally {
             setImporting(false);
         }
@@ -157,7 +162,7 @@ export default function QuestionImportPage() {
                 await deleteQuestion(id);
                 fetchImportedQuestions();
             } catch (error) {
-                alert("Error deleting question: " + error.message);
+                toast.error("Error deleting question: " + error.message);
             }
         }
     };
