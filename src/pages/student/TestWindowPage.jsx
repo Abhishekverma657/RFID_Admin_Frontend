@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { startTest, saveAnswer, submitTest, logViolation, uploadSnapshot, getTimeRemaining } from "../../api/testSystemApi";
-import { Clock, AlertTriangle, Monitor, CheckCircle, ChevronLeft, ChevronRight, Save, Menu, Camera, Video, VideoOff } from "lucide-react";
+import { Clock, AlertTriangle, Monitor, CheckCircle, ChevronLeft, ChevronRight, Save, Menu, Camera, Video, VideoOff, Activity } from "lucide-react";
 import socketService from "../../utils/socketService";
 
 export default function TestWindowPage() {
@@ -134,6 +134,23 @@ export default function TestWindowPage() {
                     socket.on("connect", handleSocketConnect);
                     socket.on("disconnect", handleSocketDisconnect);
                     socket.on("connect_error", handleSocketDisconnect);
+
+                    // Handle Admin Actions
+                    socketService.onTerminateTest((data) => {
+                        console.log("Test terminated by admin:", data.reason);
+                        // Stop camera
+                        if (cameraStream) {
+                            cameraStream.getTracks().forEach(track => track.stop());
+                        }
+                        setFinalSubmitType("auto-violation"); // Treat as violation for UI
+                        setIsSubmitted(true);
+                        localStorage.removeItem("testToken");
+                        alert(`Crucial: Your test has been terminated by the administrator.\nReason: ${data.reason}`);
+                    });
+
+                    socketService.onWarningFromAdmin((data) => {
+                        alert(`⚠️ WARNING FROM ADMINISTRATOR:\n\n${data.message}\n\nPlease follow the guidelines to avoid termination.`);
+                    });
 
                     setLoading(false);
                 }

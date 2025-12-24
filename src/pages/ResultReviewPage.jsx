@@ -179,6 +179,9 @@ export default function ResultReviewPage() {
                                                 }`}>
                                                 {result.submitType || "N/A"}
                                             </span>
+                                            {result.submitType === "admin-terminated" && (
+                                                <p className="text-[10px] text-gray-500 mt-1">By: {result.terminatedBy}</p>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`text-sm font-medium ${(result.violationCount || 0) > 0 ? "text-red-600" : "text-gray-500"
@@ -287,13 +290,25 @@ export default function ResultReviewPage() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-500">Submit Type</span>
-                                                    <span className={`px-2 py-0.5 rounded text-xs ${detailData.examSummary.submitType === "manual"
-                                                        ? "bg-blue-100 text-blue-700"
-                                                        : "bg-orange-100 text-orange-700"
+                                                    <span className={`px-2 py-0.5 rounded text-xs ${detailData.examSummary.submitType === "manual" ? "bg-blue-100 text-blue-700" :
+                                                            detailData.examSummary.submitType === "admin-terminated" ? "bg-red-100 text-red-700" :
+                                                                "bg-orange-100 text-orange-700"
                                                         }`}>
                                                         {detailData.examSummary.submitType}
                                                     </span>
                                                 </div>
+                                                {detailData.examSummary.submitType === "admin-terminated" && (
+                                                    <div className="bg-red-50 p-3 rounded-lg border border-red-100 space-y-1">
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-500 text-[10px] uppercase font-bold">Terminated By</span>
+                                                            <span className="font-black text-red-600 text-[10px]">{detailData.examSummary.terminatedBy || "Admin"}</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span className="text-gray-500 text-[10px] uppercase font-bold">Reason</span>
+                                                            <span className="font-medium text-gray-900 text-[10px]">{detailData.examSummary.terminationReason || "N/A"}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-500">Start Time</span>
                                                     <span className="font-medium">{new Date(detailData.examSummary.startTime).toLocaleString()}</span>
@@ -534,7 +549,8 @@ export default function ResultReviewPage() {
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

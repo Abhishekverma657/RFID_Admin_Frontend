@@ -1,15 +1,19 @@
 import { useState, useEffect } from "react";
-import { Bell, Users, AlertTriangle, Activity, CheckCircle } from "lucide-react";
+import { Bell, Users, AlertTriangle, Activity, CheckCircle, Clock } from "lucide-react";
 import socketService from "../utils/socketService";
-import React from 'react'
+import React from 'react';
+import { useAppContext } from "../context/AppContext";
 
 export default function LiveMonitoringPage() {
     const [activeStudents, setActiveStudents] = useState([]);
     const [violations, setViolations] = useState([]);
     const [autoSubmits, setAutoSubmits] = useState([]);
     const [connected, setConnected] = useState(false);
+    const [selectedStudent, setSelectedStudent] = useState(null);
+    const [studentSnapshots, setStudentSnapshots] = useState({}); // { testResponseId: [urls] }
 
-    const instituteId = localStorage.getItem("instituteId");
+    const { user } = useAppContext();
+    const instituteId = user?.instituteId || user?._id;
 
     useEffect(() => {
         if (!instituteId) return;
@@ -72,6 +76,17 @@ export default function LiveMonitoringPage() {
             setActiveStudents((prev) =>
                 prev.filter(s => s.testResponseId !== data.testResponseId)
             );
+        });
+
+        // Listen for live snapshots
+        socketService.onStudentSnapshot((data) => {
+            setStudentSnapshots((prev) => {
+                const existing = prev[data.testResponseId] || [];
+                return {
+                    ...prev,
+                    [data.testResponseId]: [data.imageUrl, ...existing].slice(0, 10) // Keep last 10
+                };
+            });
         });
 
         return () => {
@@ -197,7 +212,12 @@ export default function LiveMonitoringPage() {
                                     {/* Progress indicator or simple status line */}
                                     <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
                                         <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">CONNECTED</span>
-                                        <button className="text-[10px] font-bold text-blue-600 hover:underline">VIEW LIVE DATA</button>
+                                        <button
+                                            onClick={() => setSelectedStudent(student)}
+                                            className="text-[10px] font-bold text-blue-600 hover:underline"
+                                        >
+                                            VIEW LIVE DATA
+                                        </button>
                                     </div>
                                 </div>
                             ))
@@ -274,6 +294,145 @@ export default function LiveMonitoringPage() {
                     )}
                 </div>
             </div>
+
+            {/* Live Student Detail Modal */}
+            {selectedStudent && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+                        {/* Modal Header */}
+                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <div>
+                                <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                    Live Session: {selectedStudent.studentName || selectedStudent.userId}
+                                </h2>
+                                <p className="text-sm text-gray-500 font-medium mt-1 uppercase tracking-widest">{selectedStudent.testTitle}</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedStudent(null)}
+                                className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:shadow-md transition-all"
+                            >
+                                <CheckCircle className="rotate-45" size={24} />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Left Column: Latest Feed */}
+                                <div className="space-y-6">
+                                    <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest">Live Webcam Feed</h3>
+                                    <div className="aspect-video bg-gray-900 rounded-3xl overflow-hidden shadow-2xl relative border-4 border-white">
+                                        {studentSnapshots[selectedStudent.testResponseId] ? (
+                                            <img
+                                                src={studentSnapshots[selectedStudent.testResponseId][0]}
+                                                alt="Live Student"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center text-white/50">
+                                                <Activity size={48} className="animate-pulse mb-4" />
+                                                <p className="font-bold">Waiting for next snapshot...</p>
+                                                <p className="text-[10px] mt-2 uppercase tracking-tight">Auto-updates every 45s</p>
+                                            </div>
+                                        )}
+                                        <div className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-2 shadow-lg">
+                                            <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                                            LIVE PROCTORING
+                                        </div>
+                                    </div>
+
+                                    {/* Snapshot Reel */}
+                                    <div className="mt-6">
+                                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Previous Captures</h3>
+                                        <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar">
+                                            {(studentSnapshots[selectedStudent.testResponseId] || []).slice(1).map((url, i) => (
+                                                <div key={i} className="w-32 aspect-video flex-shrink-0 rounded-xl overflow-hidden border border-gray-100 shadow-sm">
+                                                    <img src={url} alt="Snap" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all pointer-events-none" />
+                                                </div>
+                                            ))}
+                                            {!(studentSnapshots[selectedStudent.testResponseId]?.length > 1) && (
+                                                <div className="text-[10px] text-gray-400 font-bold italic py-4">Higher snapshot history will appear here...</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Integrity Data */}
+                                <div className="space-y-6">
+                                    <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
+                                        <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Execution Integrity</h3>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Status</p>
+                                                <p className="text-xl font-black text-green-600">ACTIVE</p>
+                                            </div>
+                                            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Violations</p>
+                                                <p className={`text-xl font-black ${selectedStudent.violationCount > 3 ? 'text-red-600' : 'text-amber-500'}`}>
+                                                    {selectedStudent.violationCount || 0}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-8">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-tighter">Event Logs (Last 10)</h4>
+                                            <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                                                {violations
+                                                    .filter(v => v.testResponseId === selectedStudent.testResponseId)
+                                                    .map((v, i) => {
+                                                        const color = getViolationColor(v.violationType);
+                                                        return (
+                                                            <div key={i} className={`p-4 rounded-2xl border-l-4 flex items-center justify-between shadow-sm bg-white ${color.split(' ')[2]}`}>
+                                                                <div>
+                                                                    <p className={`text-[10px] font-black uppercase ${color.split(' ')[0]}`}>{v.violationType.replace(/_/g, ' ')}</p>
+                                                                    <p className="text-[9px] text-gray-400 font-bold mt-0.5">{new Date(v.timestamp).toLocaleTimeString()}</p>
+                                                                </div>
+                                                                <AlertTriangle size={16} className={color.split(' ')[0]} />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                {violations.filter(v => v.testResponseId === selectedStudent.testResponseId).length === 0 && (
+                                                    <div className="bg-green-50/50 rounded-2xl p-8 text-center border border-dashed border-green-100">
+                                                        <CheckCircle size={32} className="mx-auto text-green-300 mb-2" />
+                                                        <p className="text-xs font-bold text-green-600">No violations recorded yet</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => {
+                                                if (confirm(`Are you sure you want to terminate ${selectedStudent.studentName}'s test?`)) {
+                                                    const adminName = user?.name || user?.email || "Admin";
+                                                    socketService.emitTerminateTest(selectedStudent.testResponseId, "Policy Violation (Admin Action)", adminName);
+                                                    alert("Termination command sent.");
+                                                }
+                                            }}
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-100 transition-all active:scale-95"
+                                        >
+                                            Terminate Attempt
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const msg = prompt("Enter warning message:", "Please maintain exam integrity.");
+                                                if (msg) {
+                                                    socketService.emitSendWarning(selectedStudent.testResponseId, msg);
+                                                }
+                                            }}
+                                            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-100 transition-all active:scale-95"
+                                        >
+                                            Send Warning
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

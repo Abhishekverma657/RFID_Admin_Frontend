@@ -94,6 +94,13 @@ class SocketService {
         }
     }
 
+    // Listen for student snapshots
+    onStudentSnapshot(callback) {
+        if (this.socket) {
+            this.socket.on("student-snapshot", callback);
+        }
+    }
+
     // Student: Start test
     studentStartedTest(data) {
         if (this.socket) {
@@ -120,6 +127,34 @@ class SocketService {
         if (this.socket) {
             this.socket.emit("request-timer-sync", { testResponseId });
             this.socket.once("timer-sync-response", callback);
+        }
+    }
+
+    // Admin: Terminate test
+    emitTerminateTest(testResponseId, reason = "", adminName = "") {
+        if (this.socket) {
+            this.socket.emit("admin-terminate-test", { testResponseId, reason, adminName });
+        }
+    }
+
+    // Admin: Send warning
+    emitSendWarning(testResponseId, message) {
+        if (this.socket) {
+            this.socket.emit("admin-send-warning", { testResponseId, message });
+        }
+    }
+
+    // Student: Handle termination
+    onTerminateTest(callback) {
+        if (this.socket) {
+            this.socket.on("terminate-test", callback);
+        }
+    }
+
+    // Student: Handle warning
+    onWarningFromAdmin(callback) {
+        if (this.socket) {
+            this.socket.on("warning-from-admin", callback);
         }
     }
 
